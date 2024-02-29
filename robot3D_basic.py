@@ -102,7 +102,7 @@ def getLocalFrameMatrix(R_ij, t_ij):
 
     return T_ij
 
-def forwardKinematics(L1, L2, phi1, phi2, phi3):
+def forwardKinematics(L1, L2, L3, phi1, phi2, phi3):
     """Returns the end-effector position and orientation
     Args:
       L1: Length of link 1
@@ -116,28 +116,41 @@ def forwardKinematics(L1, L2, phi1, phi2, phi3):
     """
     # Matrix of Frame 1 (written w.r.t. Frame 0, which is the previous frame)
     R_01 = RotationMatrix(phi1, axis_name='z')   # Rotation matrix
-    p1 = np.array([[3], [2], [0.0]])             # Frame's origin (w.r.t. previous frame)
-    t_01 = p1                                    # Translation vector
-    T_01 = getLocalFrameMatrix(R_01, t_01)      # Matrix of Frame 1 w.r.t. Frame 0 (i.e., the world frame)
+    # Frame's origin (w.r.t. previous frame)
+    p1 = np.array([[0.0], [0], [0.0]])
+    t_01 = p1                                      # Translation vector
+
+    # Matrix of Frame 1 w.r.t. Frame 0 (i.e., the world frame)
+    T_01 = getLocalFrameMatrix(R_01, t_01)
 
     # Matrix of Frame 2 (written w.r.t. Frame 1, which is the previous frame)
     R_12 = RotationMatrix(phi2, axis_name='z')   # Rotation matrix
-    p2 = np.array([[L1], [0.0], [0.0]])         # Frame's origin (w.r.t. previous frame)
-    t_12 = p2                                    # Translation vector
-    T_12 = getLocalFrameMatrix(R_12, t_12)      # Matrix of Frame 2 w.r.t. Frame 1
+    # Frame's origin (w.r.t. previous frame)
+    p2 = np.array([[0.0], [L1 + 2 * 0.4], [0.0]])
+    t_12 = p2                                      # Translation vector
+
+    # Matrix of Frame 2 w.r.t. Frame 1
+    T_12 = getLocalFrameMatrix(R_12, t_12)
+
+    # Matrix of Frame 2 w.r.t. Frame 0 (i.e., the world frame)
+    T_02 = T_01 @ T_12
 
     # Matrix of Frame 3 (written w.r.t. Frame 2, which is the previous frame)
     R_23 = RotationMatrix(phi3, axis_name='z')   # Rotation matrix
-    p3 = np.array([[L2], [0.0], [0.0]])         # Frame's origin (w.r.t. previous frame)
-    t_23 = p3                                    # Translation vector
-    T_23 = getLocalFrameMatrix(R_23, t_23)      # Matrix of Frame 3 w.r.t. Frame 2
+    # Frame's origin (w.r.t. previous frame)
+    p3 = np.array([[0.0], [L2 + 2 * 0.4], [0.0]])
+    t_23 = p3                                      # Translation vector
+
+    # Matrix of Frame 3 w.r.t. Frame 2
+    T_23 = getLocalFrameMatrix(R_23, t_23)
 
     # Matrix of Frame 3 w.r.t. Frame 0 (i.e., the world frame)
     T_03 = T_01 @ T_12 @ T_23
-    return T_03
+    e = T_03[0:3, -1]
+    return T_01, T_02, T_03, e
 
 
-def create_cilider(L, r, color, alpha, axis, Frame):
+def create_arm(L):
     """Returns the mesh representing a cylinder
     Args:
       L: Length of the cylinder
@@ -149,102 +162,71 @@ def create_cilider(L, r, color, alpha, axis, Frame):
       C: vedo.mesh object (cylinder)
 
     """
-    C = Cylinder(r=r,
-                 height=L,
-                 pos=(L/2, 0, 0),
-                 c=color,
-                 alpha=alpha,
-                 axis=axis
-                 )
-    
-       # Also create a sphere to show as an example of a joint
-    r1 = 0.4
-    sphere1 = Sphere(r=r1).pos(-r1, 0, 0).color("gray").alpha(.8)
+    sphere = Sphere(r=0.4).pos(0, 0, 0).color('red')
+    arrows = createCoordinateFrameMesh()
+    C = Cylinder(height=L, r=0.4, axis=[0, 1, 0]).pos(0, 0.4 + L / 2, 0).color('blue')
+    C = C + sphere + arrows
+    return C
 
-    # Combine all parts into a single object
-    Frame = Frame + C + sphere1
-
-    return Frame
 
 
 def main():
 
     # Set the limits of the graph x, y, and z ranges
-    axes = Axes(xrange=(0, 20), yrange=(-2, 10), zrange=(0, 6))
+    axes = Axes(xrange=(-20, 20), yrange=(-2, 10), zrange=(0, 6))
+    plt = Plotter(interactive=False)
+    plt += __doc__
 
     # Lengths of arm parts
     L1 = 5   # Length of link 1
     L2 = 8   # Length of link 2
-
+    L3 = 3
     # Joint angles
     phi1 = 30     # Rotation angle of part 1 in degrees
     phi2 = -10    # Rotation angle of part 2 in degrees
     phi3 = 0      # Rotation angle of the end-effector in degrees
 
-    # Matrix of Frame 1 (written w.r.t. Frame 0, which is the previous frame)
-    R_01 = RotationMatrix(phi1, axis_name='z')   # Rotation matrix
-    # Frame's origin (w.r.t. previous frame)
-    p1 = np.array([[3], [2], [0.0]])
-    t_01 = p1                                      # Translation vector
-
-    # Matrix of Frame 1 w.r.t. Frame 0 (i.e., the world frame)
-    T_01 = getLocalFrameMatrix(R_01, t_01)
-
-    # Create the coordinate frame mesh and transform
-    Frame1Arrows = createCoordinateFrameMesh()
 
 
-    # Combine all parts into a single object
-    Frame1 = create_cilider(L1, 0.4, "blue", 0.8, (1, 0, 0), Frame1Arrows)
+    T_01, T_02, T_03, e = forwardKinematics(L1, L2, L3, phi1, phi2, phi3)
 
-    # Transform the part to position it at its correct location and orientation
+    # Create arms
+    Frame1 = create_arm(L1)
+    Frame2 = create_arm(L2)
+    Frame3 = create_arm(L3)
+    end_effector = Sphere(r=0.4).pos(0, L3 + .5, 0).color('green')
+
+
     Frame1.apply_transform(T_01)
-
-    # Matrix of Frame 2 (written w.r.t. Frame 1, which is the previous frame)
-    R_12 = RotationMatrix(phi2, axis_name='z')   # Rotation matrix
-    # Frame's origin (w.r.t. previous frame)
-    p2 = np.array([[L1], [0.0], [0.0]])
-    t_12 = p2                                      # Translation vector
-
-    # Matrix of Frame 2 w.r.t. Frame 1
-    T_12 = getLocalFrameMatrix(R_12, t_12)
-
-    # Matrix of Frame 2 w.r.t. Frame 0 (i.e., the world frame)
-    T_02 = T_01 @ T_12
-
-    # Create the coordinate frame mesh and transform
-    Frame2Arrows = createCoordinateFrameMesh()
-
-
-    # Combine all parts into a single object
-    Frame2 = create_cilider(L2, 0.4, "red", 0.8, (1, 0, 0), Frame2Arrows)
-
-    # Transform the part to position it at its correct location and orientation
     Frame2.apply_transform(T_02)
-
-    # Matrix of Frame 3 (written w.r.t. Frame 2, which is the previous frame)
-    R_23 = RotationMatrix(phi3, axis_name='z')   # Rotation matrix
-    # Frame's origin (w.r.t. previous frame)
-    p3 = np.array([[L2], [0.0], [0.0]])
-    t_23 = p3                                      # Translation vector
-
-    # Matrix of Frame 3 w.r.t. Frame 2
-    T_23 = getLocalFrameMatrix(R_23, t_23)
-
-    # Matrix of Frame 3 w.r.t. Frame 0 (i.e., the world frame)
-    T_03 = T_01 @ T_12 @ T_23
-
-    # Create the coordinate frame mesh and transform. This point is the end-effector. So, I am
-    # just creating the coordinate frame.
-    Frame3 = createCoordinateFrameMesh()
-
-    # Transform the part to position it at its correct location and orientation
     Frame3.apply_transform(T_03)
+    end_effector.apply_transform(T_03)
+    plt.show([Frame1, Frame2, Frame3, end_effector], axes, viewup="x, y")
 
+    direction = 1
     
-    # Show everything
-    show([Frame1, Frame2, Frame3], axes, viewup="z").close()
+    for i in range(360):
+        Frame1.apply_transform(np.linalg.inv(T_01))
+        Frame2.apply_transform(np.linalg.inv(T_02))
+        Frame3.apply_transform(np.linalg.inv(T_03))
+        end_effector.apply_transform(np.linalg.inv(T_03))
+        if (min(phi1, phi2, phi3) <= -90 or max(phi1, phi2, phi3) >= 90):
+            direction *= -1
 
+        phi1 += 1 * direction
+        phi2 += 1 * direction
+        phi3 += 1 * direction
+
+        T_01, T_02, T_03, e = forwardKinematics(L1, L2, L3, phi1, phi2, phi3)
+
+        Frame1.apply_transform(T_01)
+        Frame2.apply_transform(T_02)
+        Frame3.apply_transform(T_03)
+        end_effector.apply_transform(T_03)
+        # Show everything
+        plt.show(screenshot=f"/Users/patrickmenendez/Code/Python/Jupyter/Computer Graphics/draw-robot-arm-using-forward-kinematics-patrickmenendez29/frames/frame-{i}.jpg")
+
+    plt.interactive().close()
 
 if __name__ == '__main__':
     main()
