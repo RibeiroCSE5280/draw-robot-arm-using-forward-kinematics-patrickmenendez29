@@ -102,7 +102,7 @@ def getLocalFrameMatrix(R_ij, t_ij):
 
     return T_ij
 
-def forwardKinematics(L1, L2, L3, phi1, phi2, phi3):
+def forward_kinematics(L1, L2, L3, phi1, phi2, phi3):
     """Returns the end-effector position and orientation
     Args:
       L1: Length of link 1
@@ -188,7 +188,7 @@ def main():
 
 
 
-    T_01, T_02, T_03, e = forwardKinematics(L1, L2, L3, phi1, phi2, phi3)
+    T_01, T_02, T_03, e = forward_kinematics(L1, L2, L3, phi1, phi2, phi3)
 
     # Create arms
     Frame1 = create_arm(L1)
@@ -217,7 +217,7 @@ def main():
         phi2 += 1 * direction
         phi3 += 1 * direction
 
-        T_01, T_02, T_03, e = forwardKinematics(L1, L2, L3, phi1, phi2, phi3)
+        T_01, T_02, T_03, e = forward_kinematics(L1, L2, L3, phi1, phi2, phi3)
 
         Frame1.apply_transform(T_01)
         Frame2.apply_transform(T_02)
